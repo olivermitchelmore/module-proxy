@@ -1,25 +1,28 @@
-use std::net::SocketAddr;
+use axum::Router;
 use axum::extract::{ConnectInfo, State};
 use axum::http::{Method, StatusCode, Uri};
-use axum::Router;
 use bytes::Bytes;
+use http_body_util::BodyExt;
 use http_body_util::Full;
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
+use std::net::SocketAddr;
 
 #[derive(Clone)]
 struct AppState {
     client: Client<HttpConnector, Full<Bytes>>,
+    origin: String,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let client = Client::builder(TokioExecutor::new()).build_http();
 
-    let client: Client<HttpConnector, Full<Bytes>> = Client::builder(TokioExecutor::new())
-        .build_http();
-
-     let state = AppState { client };
+    let state = AppState {
+        client,
+        origin: "http://127.0.0.1:3000".to_string(),
+    };
 
     let router = Router::new()
         .fallback(handler)
@@ -33,8 +36,30 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn handler(method: Method, uri: Uri, ip_addr: ConnectInfo<SocketAddr>, state: State<AppState>) -> Result<String, StatusCode>{
-    println!("{} {} {}", method, uri, ip_addr.ip());
-    state.client.get(Uri::from_static("http://127.0.0.1:3000/api")).await.map_err(|e| { eprintln!("{}", e); StatusCode::BAD_GATEWAY })?;
-    Ok("hello".to_string())
+async fn handler(
+    method: Method,
+    uri: Uri,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    state: State<AppState>,
+) -> Result<Bytes, StatusCode> {
+    println!("{} {} {}", method, uri, addr.ip());
+    let pq: &str = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+    let origin_uri = format!("{}{}", state.origin, pq).parse::<Uri>().map_err(|e| {
+        eprintln!("Error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let body = state
+        .client
+        .get(origin_uri)
+        .await
+        .map_err(|e| {
+            eprintln!("{}", e);
+            StatusCode::BAD_GATEWAY
+        })?
+        .into_body();
+    let collected_body = body.collect().await.map_err(|e| {
+        eprintln!("Error: {}", e);
+        StatusCode::BAD_GATEWAY
+    })?;
+    Ok(collected_body.to_bytes())
 }
