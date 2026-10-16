@@ -1,0 +1,9 @@
+[[origin]]
+service = "jobscanner"
+host = "example.com"
+url = "http://127.0.0.1:3000"
+
+[[origin]]
+service = "anotherservice"
+host = "exd.gom"
+url = "http://something:3000"

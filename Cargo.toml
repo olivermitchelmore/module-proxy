@@ -10,3 +10,10 @@ anyhow = "1.0.104"
 hyper-util = { version = "0.1.21", features = ["client", "client-legacy"] }
 http-body-util = "0.1.5"
 bytes = "1.12.1"
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.8+spec-1.1.0"
+
+[lints.clippy]
+pedantic = "warn"
+restriction = "warn"
+nursery = "warn"
