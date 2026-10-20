@@ -308,6 +308,7 @@ dependencies = [
  "axum",
  "bytes",
  "http-body-util",
+ "hyper",
  "hyper-util",
  "serde",
  "thiserror",

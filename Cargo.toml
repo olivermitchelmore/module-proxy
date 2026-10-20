@@ -15,6 +15,7 @@ toml = "1.1.8+spec-1.1.0"
 thiserror = "2.0.21"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+hyper = "1.11.1"
 
 [lints.clippy]
 pedantic = "warn"

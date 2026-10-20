@@ -75,7 +75,7 @@ struct OriginList {
     origin: Vec<Origin>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
     origins: HashMap<String, Uri>,
 }
@@ -91,10 +91,11 @@ impl Config {
                     url: origin.url,
                     source: e,
                 })?;
-            let validated_host = validate_host(&origin.host).map_err(|e| ConfigError::InvalidHost {
-                source: e,
-                host: origin.host.clone(),
-            })?;
+            let validated_host =
+                validate_host(&origin.host).map_err(|e| ConfigError::InvalidHost {
+                    source: e,
+                    host: origin.host.clone(),
+                })?;
             match origins.entry(validated_host) {
                 Entry::Occupied(entry) => {
                     return Err(ConfigError::DuplicateHost {
@@ -154,7 +155,6 @@ pub fn validate_host(host: &str) -> Result<String, HostError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     mod config {
         use super::*;
         use std::assert_matches;
