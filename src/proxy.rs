@@ -1,6 +1,8 @@
 use crate::AppState;
+use crate::pipeline::{Decision, RequestView};
 use axum::extract::{ConnectInfo, State};
 use axum::http;
+use axum::http::uri::PathAndQuery;
 use axum::http::{HeaderMap, Method, Request, Response, StatusCode, Uri};
 use axum::response::IntoResponse;
 use bytes::Bytes;
@@ -48,11 +50,18 @@ pub enum RequestError {
         #[from]
         source: hyper::Error,
     },
+    #[error("module returned stop")]
+    Module {
+        status_code: StatusCode,
+    },
 }
 
 impl IntoResponse for RequestError {
     fn into_response(self) -> axum::response::Response {
         match self {
+            RequestError::Module {
+                status_code,
+            } => status_code.into_response(),
             RequestError::InvalidHostHeader {
                 ..
             }
@@ -107,7 +116,24 @@ pub async fn handler(
 
     clean_headers(&mut headers);
 
-    let request = build_request(&uri, &origin, headers, method, body)?;
+    let pq: PathAndQuery = uri.path_and_query().unwrap_or(&PathAndQuery::from_static("/")).clone();
+    let path = pq.path();
+
+    let request_view = RequestView::new(path.to_string());
+
+    for module in state.modules.iter() {
+        let decision = module.run(&request_view);
+        match decision {
+            Decision::Continue => continue,
+            Decision::Stop(status_code) => {
+                return Err(RequestError::Module {
+                    status_code,
+                });
+            }
+        }
+    }
+
+    let request = build_request(origin, headers, method, body, pq)?;
     let origin_response = state.client.request(request).await?;
 
     let response = build_response(origin_response).await?;
@@ -116,14 +142,12 @@ pub async fn handler(
 }
 
 fn build_request(
-    uri: &Uri,
     origin_uri: &Uri,
     headers: HeaderMap,
     method: Method,
     body: Bytes,
+    pq: PathAndQuery,
 ) -> Result<Request<Full<Bytes>>, RequestError> {
-    let pq = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
-
     let request_uri = Uri::builder()
         .scheme(
             origin_uri
